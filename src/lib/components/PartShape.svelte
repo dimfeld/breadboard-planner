@@ -187,12 +187,22 @@
     {/each}
   {/if}
 
-  <text class="label" class:on-body={rigid} x={label.x} y={label.y}>
-    <tspan class="ref">{comp.ref}</tspan>
-    {#if rigid && comp.value && (pkg.kind === 'dip' ? n >= 6 : n >= 4)}
-      <tspan class="value" dx="0.3">{comp.value}</tspan>
+  {#if pkg.kind === 'dip' && placement.rotation % 2 === 1}
+    <!-- A turned DIP body is narrow: put the reference and value on two lines. -->
+    <text class="label on-body" x={label.x} y={label.y - (comp.value && n >= 6 ? 0.35 : 0)}>
+      <tspan class="ref">{comp.ref}</tspan>
+    </text>
+    {#if comp.value && n >= 6}
+      <text class="label on-body small" x={label.x} y={label.y + 0.35}>{comp.value.slice(0, 7)}</text>
     {/if}
-  </text>
+  {:else}
+    <text class="label" class:on-body={rigid} x={label.x} y={label.y}>
+      <tspan class="ref">{comp.ref}</tspan>
+      {#if rigid && comp.value && (pkg.kind === 'dip' ? n >= 6 : n >= 4)}
+        <tspan class="value" dx="0.3">{comp.value}</tspan>
+      {/if}
+    </text>
+  {/if}
 
   {#if done && !ghost}
     <g class="check" transform="translate({rigid ? bbox.x1 + 0.5 : label.x + 1.1} {rigid ? bbox.y0 - 0.5 : label.y})">
@@ -321,6 +331,10 @@
   .label.on-body {
     fill: #f2f2f2;
     stroke: none;
+  }
+  .label.small {
+    font-size: 0.42px;
+    opacity: 0.85;
   }
   .ref {
     font-weight: 700;

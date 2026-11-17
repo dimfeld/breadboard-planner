@@ -5,10 +5,20 @@ export type BoardType = 'full' | 'half' | 'mini';
 export interface BoardInstance {
   id: string;
   type: BoardType;
-  /** Global grid position of the hole in the top-left terminal column of the board. */
+  /** Global grid position of local point (0, 0): the top rail hole row, first terminal column. */
   x: number;
   y: number;
   name: string;
+  /**
+   * A vertical board is the horizontal board turned 90 degrees clockwise: column 1 is at the top
+   * and row "a" is on the right. Missing means horizontal (projects made before this option).
+   */
+  vertical?: boolean;
+}
+
+/** Convert a local board point (in the horizontal layout) to a global grid point. */
+export function toGlobal(board: BoardInstance, lx: number, ly: number): Point {
+  return board.vertical ? { x: board.x - ly, y: board.y + lx } : { x: board.x + lx, y: board.y + ly };
 }
 
 export interface RailDef {
@@ -94,8 +104,7 @@ export function boardHoles(board: BoardInstance): HoleInfo[] {
   for (let c = 0; c < def.columns; c++) {
     def.rowY.forEach((ly, r) => {
       const half = r < 5 ? 'top' : 'bottom';
-      const x = board.x + c;
-      const y = board.y + ly;
+      const { x, y } = toGlobal(board, c, ly);
       out.push({
         key: `${x},${y}`,
         x,
@@ -108,8 +117,7 @@ export function boardHoles(board: BoardInstance): HoleInfo[] {
   }
   for (const rail of def.rails) {
     def.railX.forEach((lx, i) => {
-      const x = board.x + lx;
-      const y = board.y + rail.ly;
+      const { x, y } = toGlobal(board, lx, rail.ly);
       out.push({
         key: `${x},${y}`,
         x,
@@ -134,7 +142,9 @@ export function buildHoleMap(boards: BoardInstance[]): Map<string, HoleInfo> {
 
 export function boardBounds(board: BoardInstance) {
   const d = BOARD_DEFS[board.type].bounds;
-  return { x0: board.x + d.x0, y0: board.y + d.y0, x1: board.x + d.x1, y1: board.y + d.y1 };
+  const a = toGlobal(board, d.x0, d.y0);
+  const b = toGlobal(board, d.x1, d.y1);
+  return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
 }
 
 export function pointOnBoard(board: BoardInstance, p: Point): boolean {
@@ -142,15 +152,28 @@ export function pointOnBoard(board: BoardInstance, p: Point): boolean {
   return p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 }
 
-/** A position below the existing boards for a new board. */
-export function nextBoardPosition(boards: BoardInstance[]): Point {
-  if (!boards.length) return { x: 0, y: 0 };
-  let maxY = -Infinity;
-  let minX = Infinity;
+/**
+ * A position for a new board: to the right of the existing boards for a vertical board,
+ * below them for a horizontal board.
+ */
+export function nextBoardPosition(boards: BoardInstance[], type: BoardType, vertical: boolean): Point {
+  const d = BOARD_DEFS[type].bounds;
+  if (!boards.length) return vertical ? { x: Math.ceil(d.y1), y: 0 } : { x: 0, y: 0 };
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    minX = Infinity,
+    minY = Infinity;
   for (const b of boards) {
     const bb = boardBounds(b);
+    maxX = Math.max(maxX, bb.x1);
     maxY = Math.max(maxY, bb.y1);
-    minX = Math.min(minX, b.x);
+    minX = Math.min(minX, bb.x0);
+    minY = Math.min(minY, bb.y0);
   }
-  return { x: minX, y: Math.ceil(maxY + 3 + 1.4) };
+  const gap = 3;
+  if (vertical) {
+    // The board extends to the left of its origin by d.y1 units.
+    return { x: Math.ceil(maxX + gap + d.y1), y: Math.ceil(minY - d.x0) };
+  }
+  return { x: Math.ceil(minX - d.x0), y: Math.ceil(maxY + gap - d.y0 + 1.5) };
 }

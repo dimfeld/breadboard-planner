@@ -99,7 +99,8 @@
 
   function addBoard(e: Event) {
     const sel = e.target as HTMLSelectElement;
-    if (sel.value) store.addBoard(sel.value as BoardType);
+    // New boards match the orientation of the first board.
+    if (sel.value) store.addBoard(sel.value as BoardType, project.layout.boards[0]?.vertical ?? true);
     sel.value = '';
   }
 </script>

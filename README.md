@@ -14,7 +14,9 @@ pnpm build    # static build in dist/
 
 ## Modes
 
-**Visual planner.** Put one or more breadboards (full, half, or mini) on a canvas. Place parts from the parts list,
+**Visual planner.** Put one or more breadboards (full, half, or mini) on a canvas. New boards are vertical (column 1
+at the top, power rails on the sides). Select a board to change it to horizontal; the parts and wires on it turn with
+it. Place parts from the parts list,
 draw wires, and move each lead of resistors, capacitors, LEDs, and similar parts. The planner calculates the
 connectivity of the breadboard strips, power rails, wires, and pins. It shows:
 

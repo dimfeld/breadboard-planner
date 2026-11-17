@@ -216,8 +216,18 @@
         {/each}
       </select>
     </div>
+    <div class="field">
+      <span>Orientation</span>
+      <select
+        value={board.vertical ? 'vertical' : 'horizontal'}
+        onchange={(e) => store.setBoardOrientation(board.id, (e.target as HTMLSelectElement).value === 'vertical')}
+      >
+        <option value="vertical">Vertical (column 1 at the top)</option>
+        <option value="horizontal">Horizontal (column 1 at the left)</option>
+      </select>
+    </div>
     <p class="hint">
-      {contents.refs.length} parts and {contents.wires.length} wires move with this board. Drag the tab above the board
+      {contents.refs.length} parts and {contents.wires.length} wires move and turn with this board. Drag the tab above the board
       to move it.
     </p>
     <div class="buttons">

@@ -1,5 +1,5 @@
 import { analyze, type Analysis } from './connectivity';
-import { type BoardInstance, type BoardType, nextBoardPosition, pointOnBoard, boardBounds } from './boards';
+import { type BoardInstance, type BoardType, nextBoardPosition, boardBounds } from './boards';
 import type { Netlist } from './netlist/types';
 import type { PackageSpec, Point, Rotation } from './packages';
 import {
@@ -7,8 +7,11 @@ import {
   type Placement,
   type Project,
   type Wire,
+  boardContents,
   colorForNet,
   createProject,
+  defaultRotation,
+  setBoardOrientation,
   movePlacement,
   newPlacement,
   pinPositions,
@@ -234,12 +237,19 @@ class AppStore {
 
   // ---- Boards -------------------------------------------------------------
 
-  addBoard(type: BoardType) {
+  addBoard(type: BoardType, vertical = true) {
     const p = this.project;
     if (!p) return;
     this.checkpoint();
-    const pos = nextBoardPosition(p.layout.boards);
-    const board: BoardInstance = { id: uid('b_'), type, x: pos.x, y: pos.y, name: `Board ${p.layout.boards.length + 1}` };
+    const pos = nextBoardPosition(p.layout.boards, type, vertical);
+    const board: BoardInstance = {
+      id: uid('b_'),
+      type,
+      x: pos.x,
+      y: pos.y,
+      name: `Board ${p.layout.boards.length + 1}`,
+      vertical,
+    };
     p.layout.boards.push(board);
     this.selection = { kind: 'board', id: board.id };
   }
@@ -254,24 +264,23 @@ class AppStore {
 
   /** Things on a board that move with it. */
   boardContents(id: string): { refs: string[]; wires: string[] } {
-    const p = this.project!;
-    const board = p.layout.boards.find((b) => b.id === id);
-    if (!board) return { refs: [], wires: [] };
-    const refs: string[] = [];
-    for (const comp of p.netlist.components) {
-      const pl = p.layout.placements[comp.ref];
-      if (!pl) continue;
-      const pins = Object.values(pinPositions(comp, p.packages[comp.ref], pl));
-      if (pins.length && pins.every((pt) => pointOnBoard(board, pt))) refs.push(comp.ref);
-    }
-    const wires = p.layout.wires.filter((w) => pointOnBoard(board, w.a) && pointOnBoard(board, w.b)).map((w) => w.id);
-    return { refs, wires };
+    return this.project ? boardContents(this.project, id) : { refs: [], wires: [] };
+  }
+
+  setBoardOrientation(id: string, vertical: boolean) {
+    if (!this.project) return;
+    this.checkpoint();
+    setBoardOrientation(this.project, id, vertical);
+  }
+
+  defaultRotation(at?: Point): Rotation {
+    return defaultRotation(this.project?.layout.boards ?? [], at);
   }
 
   // ---- Components ---------------------------------------------------------
 
   startPlacing(ref: string) {
-    this.placing = { ref, rotation: 0 };
+    this.placing = { ref, rotation: this.defaultRotation() };
     this.tool = 'select';
     this.selection = { kind: 'component', ref };
   }

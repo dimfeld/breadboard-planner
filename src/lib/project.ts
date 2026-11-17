@@ -1,4 +1,4 @@
-import type { BoardInstance } from './boards';
+import { type BoardInstance, BOARD_DEFS, pointOnBoard } from './boards';
 import { type PackageSpec, type Point, type Rotation, inferPackage, localPinOffsets, rotatePoint } from './packages';
 import type { Component, Netlist } from './netlist/types';
 
@@ -63,7 +63,7 @@ export function createProject(name: string, netlist: Netlist): Project {
     netlist,
     packages,
     layout: {
-      boards: [{ id: uid('b_'), type: 'full', x: 0, y: 0, name: 'Board 1' }],
+      boards: [{ id: uid('b_'), type: 'full', x: Math.ceil(BOARD_DEFS.full.bounds.y1), y: 0, name: 'Board 1', vertical: true }],
       placements: {},
       wires: [],
     },
@@ -190,4 +190,62 @@ export function colorForNet(netName: string | undefined): string | undefined {
   if (/^(GND|VSS|0V|AGND|DGND|GNDA|GNDD)/.test(n)) return '#2b2b2b';
   if (/^(VCC|VDD|\+?\d+V\d*|\+?\d+V|V\+|VBAT|VIN|\+\d)/.test(n)) return '#e5484d';
   return undefined;
+}
+
+/**
+ * Default rotation for a new part. On a vertical board the strips run left to right, so parts
+ * must turn a quarter turn to straddle the channel and to span strips.
+ */
+export function defaultRotation(boards: BoardInstance[], at?: Point): Rotation {
+  const board = (at && boards.find((b) => pointOnBoard(b, at))) ?? boards[0];
+  return board?.vertical ? 1 : 0;
+}
+
+/** Parts and wires that are fully on a board. They move and turn with it. */
+export function boardContents(project: Project, id: string): { refs: string[]; wires: string[] } {
+  const board = project.layout.boards.find((b) => b.id === id);
+  if (!board) return { refs: [], wires: [] };
+  const refs: string[] = [];
+  for (const comp of project.netlist.components) {
+    const pl = project.layout.placements[comp.ref];
+    const pkg = project.packages[comp.ref];
+    if (!pl || !pkg) continue;
+    const pins = Object.values(pinPositions(comp, pkg, pl));
+    if (pins.length && pins.every((pt) => pointOnBoard(board, pt))) refs.push(comp.ref);
+  }
+  const wires = project.layout.wires
+    .filter((w) => pointOnBoard(board, w.a) && pointOnBoard(board, w.b))
+    .map((w) => w.id);
+  return { refs, wires };
+}
+
+/**
+ * Change the orientation of a board. The parts and wires on the board turn with it around the
+ * board origin, so every pin stays in the same hole.
+ */
+export function setBoardOrientation(project: Project, id: string, vertical: boolean) {
+  const board = project.layout.boards.find((b) => b.id === id);
+  if (!board || !!board.vertical === vertical) return;
+  const { refs, wires } = boardContents(project, id);
+  // Clockwise (horizontal to vertical) or counter-clockwise (vertical to horizontal).
+  const turn: Rotation = vertical ? 1 : 3;
+  const o = { x: board.x, y: board.y };
+  const turnPoint = (p: Point): Point => {
+    const r = rotatePoint({ x: p.x - o.x, y: p.y - o.y }, turn);
+    return { x: o.x + r.x, y: o.y + r.y };
+  };
+
+  for (const ref of refs) {
+    const pl = project.layout.placements[ref];
+    const anchor = turnPoint({ x: pl.x, y: pl.y });
+    const next: Placement = { ...pl, x: anchor.x, y: anchor.y, rotation: ((pl.rotation + turn) % 4) as Rotation };
+    if (pl.leads) next.leads = Object.fromEntries(Object.entries(pl.leads).map(([k, p]) => [k, turnPoint(p)]));
+    project.layout.placements[ref] = next;
+  }
+  for (const w of project.layout.wires) {
+    if (!wires.includes(w.id)) continue;
+    w.a = turnPoint(w.a);
+    w.b = turnPoint(w.b);
+  }
+  board.vertical = vertical;
 }

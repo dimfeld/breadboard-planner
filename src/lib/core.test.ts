@@ -129,6 +129,7 @@ describe('connectivity', () => {
     const nl = parseNetlist(TEXT_FORMAT_EXAMPLE);
     const project = createProject('t', nl);
     const board = project.layout.boards[0];
+    board.vertical = false;
     board.x = 0;
     board.y = 0;
     return { nl, project, board };
@@ -218,5 +219,51 @@ describe('resistor color code', () => {
     expect(resistorBands('10k')).toEqual(['#7a4a21', '#1b1b1b', '#f08a24', '#c9a43a']);
     // 330: orange orange brown gold
     expect(resistorBands('330')).toEqual(['#f08a24', '#f08a24', '#7a4a21', '#c9a43a']);
+  });
+});
+
+import { boardBounds, toGlobal, type BoardInstance } from './boards';
+import { setBoardOrientation, defaultRotation } from './project';
+describe('vertical boards', () => {
+  test('holes turn clockwise: column 1 at the top, strips run left to right', () => {
+    const board: BoardInstance = { id: 'b', type: 'full', x: 20, y: 0, name: 'B', vertical: true };
+    const holes = boardHoles(board);
+    const a1 = holes.find((h) => h.label === 'a1')!;
+    const a2 = holes.find((h) => h.label === 'a2')!;
+    const e1 = holes.find((h) => h.label === 'e1')!;
+    expect(a1).toMatchObject({ x: 17, y: 0 });
+    expect(a2).toMatchObject({ x: 17, y: 1 });
+    // a1..e1 are one strip, on one row of the vertical board.
+    expect(e1).toMatchObject({ x: 13, y: 0, group: a1.group });
+    expect(toGlobal(board, 0, 0)).toEqual({ x: 20, y: 0 });
+    const bb = boardBounds(board);
+    expect(bb.y1 - bb.y0).toBeGreaterThan(bb.x1 - bb.x0);
+    expect(defaultRotation([board])).toBe(1);
+  });
+
+  test('changing orientation keeps every connection', () => {
+    const nl = parseNetlist(SAMPLE_555_KICAD_XML);
+    const project = createProject('t', nl);
+    const board = project.layout.boards[0];
+    board.vertical = false;
+    board.x = 0;
+    board.y = 0;
+    const get = (ref: string) => nl.components.find((c) => c.ref === ref)!;
+    project.layout.placements.U1 = newPlacement(get('U1'), project.packages.U1, 10, 7, 0);
+    project.layout.placements.R1 = newPlacement(get('R1'), project.packages.R1, 6, 1, 0);
+    project.layout.placements.R1.leads = { '1': { x: 6, y: 1 }, '2': { x: 11, y: 4 } };
+    project.layout.wires.push({ id: 'w', a: { x: 10, y: 6 }, b: { x: 10, y: 1 }, color: 'red' });
+    const before = [...analyze(project).nets.values()].map((n) => [n.name, n.state, n.groups]);
+
+    setBoardOrientation(project, board.id, true);
+    expect(board.vertical).toBe(true);
+    expect(project.layout.placements.U1.rotation).toBe(1);
+    const after = analyze(project);
+    expect([...after.nets.values()].map((n) => [n.name, n.state, n.groups])).toEqual(before);
+    expect(after.warnings).toEqual([]);
+
+    setBoardOrientation(project, board.id, false);
+    expect(project.layout.placements.U1).toMatchObject({ x: 10, y: 7, rotation: 0 });
+    expect(project.layout.wires[0].a).toEqual({ x: 10, y: 6 });
   });
 });

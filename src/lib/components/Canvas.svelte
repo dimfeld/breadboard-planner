@@ -388,7 +388,8 @@
     const ref = e.dataTransfer?.getData('text/x-part-ref');
     if (!ref) return;
     e.preventDefault();
-    store.place(ref, snap(toWorld(e)), 0);
+    const at = snap(toWorld(e));
+    store.place(ref, at, store.defaultRotation(at));
     store.placing = null;
   }
 
