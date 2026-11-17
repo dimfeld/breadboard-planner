@@ -2,6 +2,16 @@
 
 A browser tool to plan and track breadboard builds from a netlist.
 
+Created originally in Claude Code with Opus 5.5 using this prompt.
+
+```
+Please help me create a breadboard assembly tool. It should be able to take a netlist XML or something similar.  And
+then there should be two modes. One should be a visual planner that lets me place one or more breadboards down and plan
+wires and components and things like that. And then I should be able to check off which ones I've placed onto the board.
+And the other mode should be similar, but only function to let me check off which components I have placed down or and
+which pins on them I have connected.
+```
+
 ## Run
 
 ```sh
